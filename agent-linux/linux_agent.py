@@ -26,13 +26,21 @@ AGENT_VERSION   = "2.0.0"
 APP_DIR    = Path("/var/lib/sovereign-rmm")
 TASKS_FILE = APP_DIR / "scheduled_tasks.json"
 STATE_FILE = APP_DIR / "state.json"
-LOG_FILE   = Path("/var/log/sovereign-rmm.log")
+# Log to /var/log if running as root, otherwise ~/.sovereign-rmm/agent.log
+import os as _os
+_log_dir = Path("/var/log") if _os.geteuid() == 0 else Path.home() / ".sovereign-rmm"
+_log_dir.mkdir(parents=True, exist_ok=True)
+LOG_FILE   = _log_dir / "sovereign-rmm.log"
 try: APP_DIR.mkdir(parents=True, exist_ok=True)
 except: APP_DIR = Path.home() / ".sovereign-rmm"; APP_DIR.mkdir(parents=True, exist_ok=True)
 
-logging.basicConfig(level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler(str(LOG_FILE),errors='ignore'), logging.StreamHandler(sys.stdout)])
+from logging.handlers import RotatingFileHandler as _RFH
+_fmt = logging.Formatter("%(asctime)s [%(levelname)-8s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+_fh  = _RFH(str(LOG_FILE), maxBytes=5*1024*1024, backupCount=3, encoding="utf-8", errors="ignore")
+_fh.setFormatter(_fmt)
+_ch  = logging.StreamHandler(sys.stdout)
+_ch.setFormatter(_fmt)
+logging.basicConfig(level=logging.INFO, handlers=[_fh, _ch])
 log = logging.getLogger("SovAgent")
 
 # ── STATE ─────────────────────────────────────────────────────
@@ -319,9 +327,16 @@ async def ws_loop(device_id, ws_ref):
 
 async def main():
     device_id = get_device_id()
-    log.info(f"Sovereign RMM Linux Agent v{AGENT_VERSION} — {device_id}")
+    log.info("=" * 60)
+    log.info(f"  Sovereign RMM Linux Agent v{AGENT_VERSION} starting")
+    log.info(f"  Device ID : {device_id}")
+    log.info(f"  Hostname  : {socket.gethostname()}")
+    log.info(f"  Log file  : {LOG_FILE}")
+    log.info(f"  Server    : {SERVER_IP_LOCAL} (local) / {SERVER_IP_VPN} (vpn)")
+    log.info("=" * 60)
     server_ip = select_server_ip()
-    for _ in range(10):
+    checked_in = False
+    for attempt in range(1, 11):
         try:
             r = requests.post(f"http://{server_ip}:{SERVER_PORT}/api/agent/checkin",
                 json={"device_id":device_id,"agent_version":AGENT_VERSION,"platform":"linux",**get_system_info()},

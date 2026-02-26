@@ -277,7 +277,14 @@ SVCEOF
 systemctl daemon-reload
 systemctl enable sovereign-rmm
 systemctl start sovereign-rmm
-echo "Sovereign RMM Agent installed and started."
+echo ""
+echo "============================================"
+echo "  Sovereign RMM Agent installed!"
+echo "  Log file: /var/log/sovereign-rmm.log"
+echo "  View live: tail -f /var/log/sovereign-rmm.log"
+echo "  Service:   systemctl status sovereign-rmm"
+echo "============================================"
+echo ""
 systemctl status sovereign-rmm --no-pager
 """
 

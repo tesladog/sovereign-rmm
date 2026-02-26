@@ -24,16 +24,23 @@ AGENT_TOKEN     = "RMM_TOKEN"
 AGENT_VERSION   = "2.0.0"
 
 # ── PATHS ────────────────────────────────────────────────────
-APP_DIR     = Path(os.getenv("LOCALAPPDATA","C:/Users/Public")) / "SovereignRMM"
+# ProgramData is always C:\ProgramData regardless of which user/SYSTEM runs the agent
+APP_DIR     = Path(os.getenv("PROGRAMDATA", "C:/ProgramData")) / "SovereignRMM"
 TASKS_FILE  = APP_DIR / "scheduled_tasks.json"
 STATE_FILE  = APP_DIR / "state.json"
 LOG_FILE    = APP_DIR / "agent.log"
 APP_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── LOGGING ──────────────────────────────────────────────────
-logging.basicConfig(level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler(sys.stdout)])
+# Rotating log: max 5 MB per file, keep 3 backups = max 20 MB total
+from logging.handlers import RotatingFileHandler
+_log_handler = RotatingFileHandler(
+    str(LOG_FILE), maxBytes=5*1024*1024, backupCount=3, encoding="utf-8"
+)
+_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)-8s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+_con_handler = logging.StreamHandler(sys.stdout)
+_con_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)-8s] %(message)s", datefmt="%H:%M:%S"))
+logging.basicConfig(level=logging.INFO, handlers=[_log_handler, _con_handler])
 log = logging.getLogger("SovAgent")
 
 # ── STATE ────────────────────────────────────────────────────
@@ -463,20 +470,34 @@ async def ws_loop(device_id, ws_ref):
 # ── MAIN ─────────────────────────────────────────────────────
 async def main():
     device_id = get_device_id()
-    log.info(f"Sovereign RMM Agent v{AGENT_VERSION} — {device_id}")
+    log.info("=" * 60)
+    log.info(f"  Sovereign RMM Agent v{AGENT_VERSION} starting")
+    log.info(f"  Device ID  : {device_id}")
+    log.info(f"  Hostname   : {socket.gethostname()}")
+    log.info(f"  Log file   : {LOG_FILE}")
+    log.info(f"  Server     : {SERVER_IP_LOCAL} (local) / {SERVER_IP_VPN} (vpn)")
+    log.info("=" * 60)
     server_ip = select_server_ip()
 
-    # Initial checkin
-    for _ in range(10):
+    # Initial checkin — retry up to 10 times, 30s apart
+    checked_in = False
+    for attempt in range(1, 11):
         resp = do_checkin(device_id, server_ip)
         if resp:
             if "policy" in resp: policy.update(resp["policy"])
-            # Load scheduled tasks from server into local cache
-            for task in resp.get("scheduled_tasks",[]):
+            for task in resp.get("scheduled_tasks", []):
                 add_or_update_task(task)
-            log.info(f"Checked in. {len(resp.get('scheduled_tasks',[]))} scheduled tasks loaded.")
+            tasks_n = len(resp.get("scheduled_tasks", []))
+            log.info(f"✓ Checked in to {server_ip}:{SERVER_PORT} — {tasks_n} scheduled task(s) loaded")
+            checked_in = True
             break
-        await asyncio.sleep(30); server_ip = select_server_ip()
+        log.warning(f"Checkin attempt {attempt}/10 failed — retrying in 30s (server: {server_ip}:{SERVER_PORT})")
+        await asyncio.sleep(30)
+        server_ip = select_server_ip()
+
+    if not checked_in:
+        log.error("Could not reach server after 10 attempts — running in offline mode")
+        log.error(f"  Check that the server is reachable at {SERVER_IP_LOCAL} or {SERVER_IP_VPN} port {SERVER_PORT}")
 
     ws_ref = [None]  # mutable ref so loops can update it
     await asyncio.gather(
