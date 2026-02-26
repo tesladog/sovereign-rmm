@@ -1,0 +1,1 @@
+hi every one that will readthis i bet it wount be much that do this is a WORK IN PROGRESS project it is a rmm ofr windows linix and some phone as of right know there is only linage os sport feel free to check it out there is a docker yaml and emv in the repo just use them in the same folder with docker 
