@@ -1821,19 +1821,43 @@ async function buildAgent(platform) {
   const btnEl    = document.getElementById(btnId);
   statusEl.style.display = 'block';
   statusEl.style.color   = 'var(--text3)';
-  statusEl.innerHTML     = '<div class="spinner" style="display:inline-block"></div> Building...';
+  statusEl.innerHTML     = '<span style="opacity:.7">⏳ Building — this can take 30-60s...</span>';
   btnEl.disabled = true;
+
   try {
-    const res = await api('/api/builds/build/' + platform, 'POST', {
-      local_ip: document.getElementById('buildLocalIP').value,
-      vpn_ip:   document.getElementById('buildVpnIP').value,
-      port:     document.getElementById('buildPort').value,
+    // Must use raw fetch — the response is a binary file, not JSON
+    const res = await fetch('/api/builds/build/' + platform, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+      body: JSON.stringify({
+        local_ip: document.getElementById('buildLocalIP').value,
+        vpn_ip:   document.getElementById('buildVpnIP').value,
+        port:     document.getElementById('buildPort').value,
+      })
     });
-    statusEl.style.color = 'var(--green)';
-    statusEl.innerHTML   = `✓ Done! <a href="${res.download_url}" download style="color:var(--accent)">Download ${res.filename}</a>`;
+
+    if (!res.ok) {
+      // Error responses ARE json
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(JSON.stringify(err));
+    }
+
+    // Trigger download from the binary blob
+    const blob = await res.blob();
+    const cd = res.headers.get('content-disposition') || '';
+    const match = cd.match(/filename[^;=\n]*=(['"\w\-\.]+)/);
+    const filename = match ? match[1].replace(/['"]/g,'') : `sovereign-agent-${platform}.${platform==='windows'?'msi':platform==='linux'?'sh':'zip'}`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+
+    statusEl.style.color = '#69ff47';
+    statusEl.innerHTML   = `✓ <strong>${filename}</strong> downloaded successfully`;
   } catch(e) {
-    statusEl.style.color   = 'var(--red)';
-    statusEl.textContent   = '✗ Build failed: ' + e.message;
+    statusEl.style.color = '#ff5252';
+    statusEl.textContent = '✗ Build failed: ' + e.message;
   }
   btnEl.disabled = false;
 }
@@ -2129,42 +2153,82 @@ function buildTagData(assetTag, deviceName, model) {
   return {
     ...tpl,
     assetTag,
-    deviceName: deviceName || assetTag,
+    deviceName: deviceName || '',   // FIXED: don't fall back to assetTag as device name
     model: model || '',
   };
 }
 
 function renderTagHTML(tag, mini=false) {
-  const scale = mini ? 0.7 : 1;
-  const w = mini ? 266 : 380, h = mini ? 112 : 160;
-  // Generate QR placeholder (real QR via canvas on print)
-  const qrSize = mini ? 70 : 100;
-  return `
-    <div class="asset-tag-preview" data-tag="${escHtml(tag.assetTag)}" data-url="${escHtml(tag.qrUrl)}"
-      style="width:${w}px;height:${h}px;background:${tag.bg};color:${tag.fg};display:flex;border-radius:6px;overflow:hidden;position:relative;font-family:'IBM Plex Mono',monospace;cursor:pointer"
-      onclick="selectTagPreview(this)">
-      <!-- QR AREA -->
-      <div style="width:${qrSize+8}px;display:flex;align-items:center;justify-content:center;padding:8px;flex-shrink:0">
-        <canvas class="qr-canvas" width="${qrSize}" height="${qrSize}" data-url="${escHtml(tag.qrUrl)}"></canvas>
+  // FIXED layout: proper sizing, no overlapping, clear hierarchy
+  const W = mini ? 320 : 420;
+  const H = mini ? 120 : 158;
+  const qrSize = mini ? 80 : 108;
+  const pad = mini ? 6 : 10;
+  const fLg = mini ? 11 : 15;  // asset tag number — largest
+  const fMd = mini ? 9  : 11;  // device name / model
+  const fSm = mini ? 7  : 9;   // labels & footer text
+
+  const ownerBlock = tagLogoDataUrl
+    ? `<img src="${tagLogoDataUrl}" style="height:${mini?14:18}px;margin-bottom:${mini?2:4}px;object-fit:contain;display:block">`
+    : `<div style="font-size:${fSm}px;font-weight:700;letter-spacing:.06em;border:1px solid ${tag.fg};padding:1px 5px;display:inline-block;margin-bottom:${mini?2:4}px">${escHtml(tag.owner)}</div>`;
+
+  return `<div class="asset-tag-preview" data-tag="${escHtml(tag.assetTag)}" data-url="${escHtml(tag.qrUrl)}"
+    style="width:${W}px;height:${H}px;background:${tag.bg};color:${tag.fg};display:flex;
+           border-radius:5px;overflow:hidden;font-family:'Courier New',monospace;
+           box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;box-sizing:border-box"
+    onclick="selectTagPreview(this)">
+
+    <!-- LEFT: QR CODE -->
+    <div style="width:${qrSize + pad*2}px;flex-shrink:0;display:flex;align-items:center;
+                justify-content:center;padding:${pad}px;
+                border-right:1px solid rgba(255,255,255,0.15)">
+      <canvas class="qr-canvas" width="${qrSize}" height="${qrSize}"
+              data-url="${escHtml(tag.qrUrl)}"
+              style="display:block;image-rendering:pixelated"></canvas>
+    </div>
+
+    <!-- RIGHT: INFO -->
+    <div style="flex:1;padding:${pad}px ${pad}px ${pad+14}px ${pad}px;
+                display:flex;flex-direction:column;gap:${mini?2:3}px;
+                overflow:hidden;position:relative">
+
+      <!-- Owner / Logo -->
+      ${ownerBlock}
+
+      <!-- Asset Tag Number — prominent -->
+      <div style="font-size:${fLg}px;font-weight:700;letter-spacing:.05em;
+                  line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        <span style="opacity:0.55;font-size:${fSm}px;font-weight:400">ASSET# </span>${escHtml(tag.assetTag)}
       </div>
-      <!-- INFO AREA -->
-      <div style="flex:1;padding:8px 8px 8px 0;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden">
-        <div>
-          ${tagLogoDataUrl?`<img src="${tagLogoDataUrl}" style="height:${mini?16:20}px;margin-bottom:4px;object-fit:contain">`:
-          `<div style="font-size:${mini?9:11}px;font-weight:700;border:1px solid ${tag.fg};padding:1px 6px;display:inline-block;margin-bottom:4px">${escHtml(tag.owner)}</div>`}
-          <div style="font-size:${mini?9:12}px;margin-bottom:2px"><span style="opacity:0.7">device: </span><strong>${escHtml(tag.deviceName)}</strong></div>
-          <div style="font-size:${mini?9:12}px;margin-bottom:2px"><span style="opacity:0.7">asset-tag: </span><strong>${escHtml(tag.assetTag)}</strong></div>
-          <div style="font-size:${mini?8:11}px;opacity:0.8"><span style="opacity:0.7">model: </span>${escHtml(tag.model)}</div>
-        </div>
-        <div>
-          <div style="font-size:${mini?7:9}px;opacity:0.8;margin-top:4px">${escHtml(tag.reward)}</div>
-        </div>
+
+      <!-- Device name (only shown if set) -->
+      ${tag.deviceName ? `<div style="font-size:${fMd}px;opacity:0.85;white-space:nowrap;
+                              overflow:hidden;text-overflow:ellipsis;line-height:1.2">
+        <span style="opacity:0.55">device: </span>${escHtml(tag.deviceName)}
+      </div>` : ''}
+
+      <!-- Model (only shown if set) -->
+      ${tag.model ? `<div style="font-size:${fSm}px;opacity:0.65;white-space:nowrap;
+                         overflow:hidden;text-overflow:ellipsis">
+        <span style="opacity:0.8">model: </span>${escHtml(tag.model)}
+      </div>` : ''}
+
+      <!-- Reward text -->
+      <div style="font-size:${fSm}px;opacity:0.6;margin-top:auto;line-height:1.3">
+        ${escHtml(tag.reward)}
       </div>
-      <!-- BOTTOM BAR -->
-      <div style="position:absolute;bottom:0;left:0;right:0;font-size:${mini?7:9}px;opacity:0.7;text-align:center;padding:3px;border-top:1px solid rgba(255,255,255,0.2)">
+
+      <!-- BOTTOM FOOTER BAR — absolutely positioned, no overlap -->
+      <div style="position:absolute;bottom:0;left:0;right:0;
+                  padding:2px ${pad}px;
+                  font-size:${fSm - 1}px;opacity:0.55;
+                  border-top:1px solid rgba(255,255,255,0.12);
+                  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+                  background:rgba(0,0,0,0.2)">
         ${escHtml(tag.found)} ${escHtml(tag.qrUrl)}
       </div>
-    </div>`;
+    </div>
+  </div>`;
 }
 
 function generateTagBatch() {
@@ -2173,50 +2237,64 @@ function generateTagBatch() {
   const end   = parseInt(document.getElementById('tagEnd')?.value || '5');
   const custom = (document.getElementById('tagCustomList')?.value || '').split('\n').map(s=>s.trim()).filter(Boolean);
   generatedTags = [];
+
   if (custom.length) {
+    // Custom list: each line IS the asset tag number — look up name from inventory
     custom.forEach(line => {
-      const parts = line.split(/\s+/);
-      generatedTags.push(buildTagData(parts[0], parts[0], parts[1]||''));
+      const tagId = line.trim();
+      generatedTags.push(buildTagData(tagId, '', ''));
     });
   } else {
-    for (let i = start; i <= end; i++) {
-      const tag = `${year}-${String(i).padStart(3,'0')}`;
-      generatedTags.push(buildTagData(tag, '', ''));
+    // Range mode: generate 2026-001, 2026-002, etc.
+    const clampedEnd = Math.min(end, start + 199); // max 200 at once
+    for (let i = start; i <= clampedEnd; i++) {
+      const tagId = `${year}-${String(i).padStart(3, '0')}`;
+      generatedTags.push(buildTagData(tagId, '', ''));
     }
   }
-  // Also try to auto-fill from inventory
+
+  // Auto-fill device name / model from inventory if asset exists
   generatedTags = generatedTags.map(t => {
     const asset = allAssets.find(a => a.asset_tag === t.assetTag);
     if (asset) {
-      t.deviceName = asset.name || t.assetTag;
+      t.deviceName = asset.name || '';
       t.model      = asset.model || '';
       if (asset.google_form_url) t.qrUrl = asset.google_form_url;
       if (asset.owner) t.owner = `Property of:${asset.owner}`;
     }
     return t;
   });
+
   refreshTagPreview();
-  toast(`Generated ${generatedTags.length} tags`, 'success');
+  if (typeof showToast === 'function') showToast(`Generated ${generatedTags.length} tag${generatedTags.length>1?'s':''}`, 'success');
 }
 
 function refreshTagPreview() {
   if (!generatedTags.length) {
-    // Generate a single preview from the first numeric tag
     const year = document.getElementById('tagYear')?.value || '2026';
-    generatedTags = [buildTagData(`${year}-001`, 'device-name', 'model-here')];
+    // Preview shows the tag number correctly, device name blank (not the tag ID)
+    generatedTags = [buildTagData(`${year}-001`, '', '')];
   }
   const tpl = getTagTemplate();
-  generatedTags = generatedTags.map(t => ({...t, ...tpl, assetTag:t.assetTag, deviceName:t.deviceName, model:t.model}));
+  // Merge template (colors, text) but preserve tag-specific fields
+  generatedTags = generatedTags.map(t => ({
+    ...tpl,
+    assetTag:   t.assetTag,
+    deviceName: t.deviceName,
+    model:      t.model,
+  }));
   const grid = document.getElementById('tagPreviewGrid');
   if (!grid) return;
   grid.innerHTML = generatedTags.map(t => `
-    <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">
       ${renderTagHTML(t)}
-      <div style="font-size:11px;color:var(--text3);font-family:var(--mono);text-align:center">${t.assetTag}</div>
+      <div style="font-size:10px;color:var(--text3);font-family:monospace;padding-left:2px">
+        ${escHtml(t.assetTag)}${t.deviceName ? ' — ' + escHtml(t.deviceName) : ''}
+      </div>
     </div>`).join('');
-  document.getElementById('tagPreviewCount').textContent = `${generatedTags.length} tags`;
-  // Render QR codes
-  setTimeout(renderQRCodes, 100);
+  const countEl = document.getElementById('tagPreviewCount');
+  if (countEl) countEl.textContent = `${generatedTags.length} tag${generatedTags.length>1?'s':''}`;
+  setTimeout(renderQRCodes, 80);
 }
 
 function renderQRCodes() {

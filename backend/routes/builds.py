@@ -130,10 +130,6 @@ def build_msi(local_ip: str, vpn_ip: str, port: str, token: str) -> Path:
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed."/>
     <MediaTemplate EmbedCab="yes"/>
 
-    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR"/>
-    <UIRef Id="WixUI_Minimal"/>
-    <WixVariable Id="WixUILicenseRtf" Value="License.rtf"/>
-
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
         <Directory Id="INSTALLDIR" Name="SovereignRMM">
@@ -145,13 +141,15 @@ def build_msi(local_ip: str, vpn_ip: str, port: str, token: str) -> Path:
             <File Id="LauncherVbs"   Source="{silent_launcher}"  Name="sovereign_start.vbs"/>
             <File Id="InstallPs1"    Source="{install_ps}"       Name="install.ps1"/>
             <File Id="UninstallPs1"  Source="{uninstall_ps}"     Name="uninstall.ps1"/>
-            <!-- Registry autostart -->
+          </Component>
+          <!-- Registry autostart — separate component so KeyPath is unambiguous -->
+          <Component Id="AgentRegKey" Guid="*">
             <RegistryValue Root="HKLM"
               Key="SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"
               Name="SovereignRMM"
               Type="string"
               Value="wscript.exe &quot;[INSTALLDIR]sovereign_start.vbs&quot;"
-              KeyPath="no"/>
+              KeyPath="yes"/>
           </Component>
 
           <!-- Python embeddable runtime -->
@@ -163,6 +161,7 @@ def build_msi(local_ip: str, vpn_ip: str, port: str, token: str) -> Path:
 
     <Feature Id="ProductFeature" Title="Sovereign RMM Agent" Level="1">
       <ComponentRef Id="AgentScript"/>
+      <ComponentRef Id="AgentRegKey"/>
       {component_refs}
     </Feature>
 
@@ -191,14 +190,10 @@ def build_msi(local_ip: str, vpn_ip: str, port: str, token: str) -> Path:
 </Wix>
 """)
 
-        # Create a minimal license RTF
-        license_rtf = work_dir / "License.rtf"
-        license_rtf.write_text(r'{\rtf1\ansi Sovereign RMM Agent — Internal Use Only}')
-
         # 6. Run wixl to compile MSI
         out_msi = BUILD_DIR / f"SovereignRMM-Agent-{build_id}.msi"
         result = subprocess.run(
-            ["wixl", "-o", str(out_msi), str(wxs)],
+            ["wixl", "-v", "-o", str(out_msi), str(wxs), "-D", "SourceDir=" + str(work_dir)],
             capture_output=True, text=True, cwd=str(work_dir)
         )
         if result.returncode != 0:
