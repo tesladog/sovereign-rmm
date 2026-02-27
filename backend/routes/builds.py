@@ -173,34 +173,36 @@ def build_msi(local_ip: str, vpn_ip: str, port: str, token: str) -> Path:
            Manufacturer="Sovereign RMM"
            UpgradeCode="{upgrade_code}">
 
-    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Platform="x64"/>
+    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine"/>
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed."/>
     <MediaTemplate EmbedCab="yes"/>
 
-    <!-- Install to C:\\ProgramData\\SovereignRMM (no UAC, SYSTEM-accessible) -->
+    <!-- Install to C:\\ProgramData\\SovereignRMM -->
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="CommonAppDataFolder">
-        <Directory Id="INSTALLDIR" Name="SovereignRMM"/>
+        <Directory Id="INSTALLDIR" Name="SovereignRMM">
+
+          <!-- Agent files — nested inside Directory, not via Directory attribute -->
+          <Component Id="AgentFiles" Guid="{comp_files}">
+            <File Id="AgentPy"      Source="{agent_py}"      Name="agent.py"      KeyPath="yes"/>
+            <File Id="RunVbs"       Source="{launcher_vbs}"  Name="run.vbs"/>
+            <File Id="PostInstPs1"  Source="{post_install}"  Name="post_install.ps1"/>
+            <File Id="PreUninstPs1" Source="{pre_uninstall}" Name="pre_uninstall.ps1"/>
+          </Component>
+
+          <!-- Registry autostart (own Component, own KeyPath) -->
+          <Component Id="AgentReg" Guid="{comp_reg}">
+            <RegistryValue Root="HKLM"
+              Key="SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"
+              Name="SovereignRMM"
+              Type="string"
+              Value="wscript.exe &quot;[INSTALLDIR]run.vbs&quot;"
+              KeyPath="yes"/>
+          </Component>
+
+        </Directory>
       </Directory>
     </Directory>
-
-    <!-- Agent files component -->
-    <Component Id="AgentFiles" Directory="INSTALLDIR" Guid="{comp_files}">
-      <File Id="AgentPy"      Source="{agent_py}"      Name="agent.py"      KeyPath="yes"/>
-      <File Id="RunVbs"       Source="{launcher_vbs}"  Name="run.vbs"/>
-      <File Id="PostInstPs1"  Source="{post_install}"  Name="post_install.ps1"/>
-      <File Id="PreUninstPs1" Source="{pre_uninstall}" Name="pre_uninstall.ps1"/>
-    </Component>
-
-    <!-- Registry autostart fallback (separate component, own KeyPath) -->
-    <Component Id="AgentReg" Directory="INSTALLDIR" Guid="{comp_reg}">
-      <RegistryValue Root="HKLM"
-        Key="SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"
-        Name="SovereignRMM"
-        Type="string"
-        Value="wscript.exe &quot;[INSTALLDIR]run.vbs&quot;"
-        KeyPath="yes"/>
-    </Component>
 
     <Feature Id="Main" Title="Sovereign RMM Agent" Level="1">
       <ComponentRef Id="AgentFiles"/>
