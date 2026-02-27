@@ -43,6 +43,45 @@ _con_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)-8s] %(mes
 logging.basicConfig(level=logging.INFO, handlers=[_log_handler, _con_handler])
 log = logging.getLogger("SovAgent")
 
+# ── NOTIFICATIONS ────────────────────────────────────────────
+def notify(title: str, message: str, icon: str = "info"):
+    """
+    Send a Windows 10/11 toast notification to the logged-in user.
+    icon: "info" | "warning" | "error"
+    Runs silently in background via powershell — never blocks the agent.
+    Fails silently if no user is logged in (e.g. locked server).
+    """
+    # Toast XML — simple two-line notification
+    xml = (
+        f'<toast scenario="default">'
+        f'<visual><binding template="ToastGeneric">'
+        f'<text>{title}</text>'
+        f'<text>{message}</text>'
+        f'</binding></visual>'
+        f'</toast>'
+    )
+    # PowerShell one-liner: load WinRT, show toast
+    # Uses powershell.exe AppId so it works without an app registration
+    ps = (
+        "[Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime]|Out-Null;"
+        "[Windows.Data.Xml.Dom.XmlDocument,Windows.Data.Xml.Dom.XmlDocument,ContentType=WindowsRuntime]|Out-Null;"
+        "$x=[Windows.Data.Xml.Dom.XmlDocument]::new();"
+        f"$x.LoadXml('{xml}');"
+        "$t=[Windows.UI.Notifications.ToastNotification]::new($x);"
+        "$a='{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe';"
+        "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($a).Show($t)"
+    )
+    try:
+        subprocess.Popen(
+            ["powershell.exe", "-WindowStyle", "Hidden", "-NonInteractive",
+             "-ExecutionPolicy", "Bypass", "-Command", ps],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=0x08000000  # CREATE_NO_WINDOW
+        )
+    except Exception as e:
+        log.debug(f"Notify failed (no user logged in?): {e}")
+
+
 # ── STATE ────────────────────────────────────────────────────
 def state_load():
     try: return json.loads(STATE_FILE.read_text())
@@ -266,6 +305,13 @@ async def execute_task(task_data, ws, device_id):
               "stdout":"".join(stdout_buf)[:65535],
               "stderr":"".join(stderr_buf)[:16383],
               "started_at":started_at}
+    # Toast notification — success or failure
+    task_name = task_data.get("name", f"Task {task_id[:8]}")
+    if exit_code == 0:
+        notify("RMM Task Complete ✓", f"{task_name} finished successfully.")
+    else:
+        err_preview = "".join(stderr_buf)[:80].strip() or f"Exit code {exit_code}"
+        notify("RMM Task Failed ✗", f"{task_name}: {err_preview}", "error")
     if ws:
         try:
             await ws.send(json.dumps({"type":"task_result","data":result}))
@@ -375,6 +421,7 @@ async def local_task_runner(ws_ref, device_id):
                         log.info(f"Task {task_id} cancelled on server — skipping")
                         cancel_task_local(task_id); continue
                 log.info(f"Running scheduled task: {task.get('name','?')} [{trigger}]")
+                notify("Sovereign RMM", f"Running task: {task.get('name','?')}")
                 await execute_task(task, ws_ref[0], device_id)
                 # Update last_run or remove if 'once'
                 if trigger == "once":
@@ -436,6 +483,10 @@ async def ws_loop(device_id, ws_ref):
             async with websockets.connect(url, ping_interval=30, ping_timeout=15) as ws:
                 ws_ref[0] = ws
                 log.info("Connected!")
+                log.debug("WebSocket connected — sending reconnect toast if was offline")
+                if state_load().get("was_offline"):
+                    notify("Sovereign RMM", "Connection to management server restored.")
+                    state_save({**state_load(), "was_offline": False})
                 async def heartbeat():
                     while True:
                         info = get_system_info()
@@ -497,6 +548,7 @@ async def main():
 
     if not checked_in:
         log.error("Could not reach server after 10 attempts — running in offline mode")
+        notify("Sovereign RMM — Warning", "Cannot reach management server. Running in offline mode.", "warning")
         log.error(f"  Check that the server is reachable at {SERVER_IP_LOCAL} or {SERVER_IP_VPN} port {SERVER_PORT}")
 
     ws_ref = [None]  # mutable ref so loops can update it
