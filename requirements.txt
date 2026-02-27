@@ -1,0 +1,63 @@
+# Core dependencies
+Flask==3.0.0
+Flask-CORS==4.0.0
+Flask-SocketIO==5.3.5
+python-socketio==5.10.0
+
+# Database
+SQLAlchemy==2.0.23
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# Redis
+redis==5.0.1
+
+# Windows specific (optional, for Windows agents)
+pywin32==306; sys_platform == 'win32'
+wmi==1.5.1; sys_platform == 'win32'
+psutil==5.9.6
+
+# File operations
+watchdog==3.0.0
+send2trash==1.8.2
+
+# USB/Drive detection
+pyudev==0.24.1; sys_platform == 'linux'
+
+# Networking
+requests==2.31.0
+netifaces==0.11.0
+
+# Utilities
+python-dotenv==1.0.0
+PyYAML==6.0.1
+click==8.1.7
+
+# Task scheduling
+APScheduler==3.10.4
+
+# Logging
+python-json-logger==2.0.7
+
+# Label generation
+Pillow==10.1.0
+python-barcode==0.15.1
+qrcode==7.4.2
+
+# MSI building (development only)
+cx-Freeze==6.15.10
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# Code quality
+black==23.12.1
+flake8==6.1.0
+mypy==1.7.1
+
+# Production server
+gunicorn==21.2.0
+gevent==23.9.1
+eventlet==0.33.3
