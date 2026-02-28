@@ -1,65 +1,48 @@
-# Sovereign RMM - Complete System
+# Sovereign RMM - COMPLETE & READY
 
-## Quick Start
+## Deploy in 3 Commands
 
 ```bash
-# 1. Clone or copy files
-cd sovereign-rmm-complete
-
-# 2. Edit .env (change passwords!)
-nano .env
-
-# 3. Start
 docker compose up -d
-
-# 4. Access
-Dashboard: http://your-server:8080
-API: http://your-server:8000
 ```
 
-## Features
+That's it. Done.
 
-- ✅ Multi-platform agents (Windows, Linux, Android)
-- ✅ Real-time device monitoring
-- ✅ Script execution
-- ✅ Update management
-- ✅ Device lockdown
-- ✅ Storage tracking
-- ✅ Beautiful dark theme UI
+## Access
 
-## Structure
+- Dashboard: http://your-server:8080
+- API: http://your-server:8000
 
-```
-sovereign-rmm-complete/
-├── compose.yaml       # Docker config
-├── .env              # Configuration
-├── backend/          # FastAPI backend
-│   ├── Dockerfile
-│   ├── main.py
-│   ├── models.py
-│   ├── database.py
-│   └── routes/
-└── frontend/         # Nginx + HTML
-    ├── Dockerfile
-    ├── nginx.conf
-    └── index.html
-```
+## What You Get
+
+✅ PostgreSQL database
+✅ Redis cache
+✅ FastAPI backend
+✅ Beautiful dark UI
+✅ Real-time WebSocket
+✅ Device management
+✅ Ready for agents
+
+## Configuration
+
+Edit `.env` before deploying:
+- Change all passwords
+- Set SERVER_IP to your actual IP
+- Keep AGENT_TOKEN secure
 
 ## Troubleshooting
 
-### DNS Issues
+### Build fails
 ```bash
-echo '{"dns": ["8.8.8.8", "8.8.4.4"]}' | sudo tee /etc/docker/daemon.json
+echo '{"dns": ["8.8.8.8"]}' | sudo tee /etc/docker/daemon.json
 sudo systemctl restart docker
 ```
 
-### Check Status
+### Check status
 ```bash
 docker compose ps
-docker compose logs -f backend
+docker compose logs -f
 curl http://localhost:8000/api/health
 ```
 
-## License
-
-MIT - Free to use
+## Done.

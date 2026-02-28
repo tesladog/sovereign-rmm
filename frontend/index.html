@@ -31,79 +31,31 @@
         <h1>🖥️ Sovereign RMM</h1>
         <div class="status">● Connected</div>
     </div>
-    
     <div class="container">
         <div class="stats">
-            <div class="stat-card">
-                <h3>Total Devices</h3>
-                <div class="value" id="total-devices">0</div>
-            </div>
-            <div class="stat-card">
-                <h3>Online</h3>
-                <div class="value" style="color: #10b981;" id="online-devices">0</div>
-            </div>
-            <div class="stat-card">
-                <h3>Offline</h3>
-                <div class="value" style="color: #ef4444;" id="offline-devices">0</div>
-            </div>
-            <div class="stat-card">
-                <h3>Alerts</h3>
-                <div class="value" style="color: #f59e0b;">0</div>
-            </div>
+            <div class="stat-card"><h3>Total Devices</h3><div class="value" id="total-devices">0</div></div>
+            <div class="stat-card"><h3>Online</h3><div class="value" style="color: #10b981;" id="online-devices">0</div></div>
+            <div class="stat-card"><h3>Offline</h3><div class="value" style="color: #ef4444;" id="offline-devices">0</div></div>
+            <div class="stat-card"><h3>Alerts</h3><div class="value" style="color: #f59e0b;">0</div></div>
         </div>
-        
-        <div class="devices">
-            <h2>Devices</h2>
-            <div id="devices-table">
-                <div class="loading">Loading devices...</div>
-            </div>
-        </div>
+        <div class="devices"><h2>Devices</h2><div id="devices-table"><div class="loading">Loading devices...</div></div></div>
     </div>
-    
     <script>
         async function loadDevices() {
             try {
                 const response = await fetch('/api/devices/');
                 const devices = await response.json();
-                
                 document.getElementById('total-devices').textContent = devices.length;
                 document.getElementById('online-devices').textContent = devices.filter(d => d.status === 'online').length;
                 document.getElementById('offline-devices').textContent = devices.filter(d => d.status === 'offline').length;
-                
-                const tableHTML = `
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Hostname</th>
-                                <th>Type</th>
-                                <th>IP Address</th>
-                                <th>OS</th>
-                                <th>Status</th>
-                                <th>Last Seen</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${devices.map(d => `
-                                <tr>
-                                    <td>${d.hostname}</td>
-                                    <td>${d.device_type || '-'}</td>
-                                    <td>${d.ip_address || '-'}</td>
-                                    <td>${d.os_version || '-'}</td>
-                                    <td><span class="status-badge status-${d.status}">${d.status}</span></td>
-                                    <td>${d.last_seen ? new Date(d.last_seen).toLocaleString() : 'Never'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-                
+                const tableHTML = '<table><thead><tr><th>Hostname</th><th>Type</th><th>IP</th><th>OS</th><th>Status</th><th>Last Seen</th></tr></thead><tbody>' +
+                    devices.map(d => '<tr><td>'+d.hostname+'</td><td>'+(d.device_type||'-')+'</td><td>'+(d.ip_address||'-')+'</td><td>'+(d.os_version||'-')+'</td><td><span class="status-badge status-'+d.status+'">'+d.status+'</span></td><td>'+(d.last_seen ? new Date(d.last_seen).toLocaleString() : 'Never')+'</td></tr>').join('') +
+                    '</tbody></table>';
                 document.getElementById('devices-table').innerHTML = tableHTML;
             } catch (error) {
-                console.error('Failed to load devices:', error);
                 document.getElementById('devices-table').innerHTML = '<div class="loading">Failed to load devices</div>';
             }
         }
-        
         loadDevices();
         setInterval(loadDevices, 30000);
     </script>
