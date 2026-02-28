@@ -2,7 +2,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: sovereign-rmm-postgres
+    container_name: rmm-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB:       ${POSTGRES_DB}
@@ -11,6 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks: [rmm-internal]
+    dns: ["8.8.8.8", "8.8.4.4", "1.1.1.1"]
     healthcheck:
       test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -20,11 +21,12 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: sovereign-rmm-redis
+    container_name: rmm-redis
     restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD}
     volumes: [redis_data:/data]
     networks: [rmm-internal]
+    dns: ["8.8.8.8", "8.8.4.4"]
     healthcheck:
       test: ["CMD","redis-cli","--no-auth-warning","-a","${REDIS_PASSWORD}","ping"]
       interval: 10s
@@ -33,10 +35,9 @@ services:
 
   backend:
     build:
-      context: https://github.com/tesladog/sovereign-rmm.git#main
+      context: .
       dockerfile: backend/Dockerfile
-    pull_policy: build
-    container_name: sovereign-rmm-backend
+    container_name: rmm-backend
     restart: unless-stopped
     environment:
       DATABASE_URL:   postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -49,10 +50,10 @@ services:
     volumes:
       - agent_builds:/app/agent-builds
       - update_cache:/app/update-cache
-      - lockdown_data:/app/lockdown-data
     ports:
       - "${BACKEND_PORT}:8000"
     networks: [rmm-internal, rmm-external]
+    dns: ["8.8.8.8", "8.8.4.4"]
     depends_on:
       postgres: {condition: service_healthy}
       redis:    {condition: service_healthy}
@@ -65,14 +66,14 @@ services:
 
   frontend:
     build:
-      context: https://github.com/tesladog/sovereign-rmm.git#main
+      context: .
       dockerfile: frontend/Dockerfile
-    pull_policy: build
-    container_name: sovereign-rmm-frontend
+    container_name: rmm-frontend
     restart: unless-stopped
     ports:
       - "${DASHBOARD_PORT}:80"
     networks: [rmm-internal, rmm-external]
+    dns: ["8.8.8.8", "8.8.4.4"]
     depends_on:
       backend: {condition: service_healthy}
 
@@ -85,4 +86,3 @@ volumes:
   redis_data:
   agent_builds:
   update_cache:
-  lockdown_data:
