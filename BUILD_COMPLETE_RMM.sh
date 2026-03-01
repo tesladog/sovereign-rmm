@@ -1,3 +1,9 @@
+#!/bin/bash
+set -e
+echo "Building COMPLETE Sovereign RMM with ALL features..."
+
+# ==================== COMPOSE.YAML ====================
+cat > compose.yaml << 'COMPOSEEOF'
 services:
   postgres:
     image: postgres:16-alpine
@@ -75,3 +81,62 @@ volumes:
   redis_data:
   agent_builds:
   update_cache:
+COMPOSEEOF
+
+# ==================== .ENV ====================
+cat > .env << 'ENVEOF'
+POSTGRES_DB=sovereignrmm
+POSTGRES_USER=rmmuser
+POSTGRES_PASSWORD=ChangeMe_DBPass123!
+
+REDIS_PASSWORD=ChangeMe_RedisPass123!
+
+SERVER_IP=192.168.1.100
+BACKEND_PORT=8000
+DASHBOARD_PORT=8080
+
+AGENT_TOKEN=b3c6d9e2f5a8b1c4d7e0f3a6b9c2d5e8f1a4b7c0d3e6f9a2b5c8d1e4f7a0b3c6
+
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=ChangeMe_AdminPass123!
+ENVEOF
+
+# ==================== BACKEND DOCKERFILE ====================
+cat > backend/Dockerfile << 'DOCKEREOF'
+FROM python:3.12-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y dpkg-dev binutils gcc python3-dev msitools wixl unzip curl && rm -rf /var/lib/apt/lists/*
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/ /app/backend/
+COPY agent-windows/ /app/agent-windows/
+COPY agent-linux/ /app/agent-linux/
+COPY agent-android/ /app/agent-android/
+WORKDIR /app/backend
+RUN mkdir -p /app/agent-builds /app/update-cache
+EXPOSE 8000
+CMD ["uvicorn","main:app","--host","0.0.0.0","--port","8000","--workers","1"]
+DOCKEREOF
+
+# ==================== REQUIREMENTS ====================
+cat > backend/requirements.txt << 'REQEOF'
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+sqlalchemy[asyncio]==2.0.30
+asyncpg==0.29.0
+aiofiles==23.2.1
+redis[asyncio]==5.0.4
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+requests==2.31.0
+pyinstaller==6.6.0
+websockets==12.0
+httpx==0.27.0
+qrcode[pil]==7.4.2
+Pillow==10.3.0
+reportlab==4.1.0
+psutil==5.9.8
+REQEOF
+
+echo "✓ Core files created"

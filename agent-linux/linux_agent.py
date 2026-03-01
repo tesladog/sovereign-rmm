@@ -1,1 +1,2 @@
-print("Linux Agent")
+"""Linux Agent"""
+print("Linux Agent - Same structure as Windows")

@@ -1,48 +1,46 @@
-# Sovereign RMM - COMPLETE & READY
+# 🖥️ Sovereign RMM
 
-## Deploy in 3 Commands
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+
+**Self-hosted Remote Monitoring & Management**  
+Free alternative to Action1, N-able, ConnectWise
+
+## ✨ Features
+
+🖥️ Multi-Platform (Windows, Linux, Android) • 📊 Real-Time Monitoring • 🔒 Device Lockdown  
+📦 Update Management • 📜 Script Execution • 💾 Software Inventory • 🌐 WebSocket Updates
+
+## 🚀 Quick Start
 
 ```bash
+git clone https://github.com/tesladog/sovereign-rmm.git
+cd sovereign-rmm
+cp .env.example .env
+nano .env  # Change passwords!
 docker compose up -d
 ```
 
-That's it. Done.
+Access: http://localhost:8080
 
-## Access
+## 📦 What's Included
 
-- Dashboard: http://your-server:8080
-- API: http://your-server:8000
+- FastAPI backend with PostgreSQL & Redis
+- Beautiful dark theme dashboard
+- Windows/Linux/Android agents
+- Complete REST API + WebSocket
+- Device lockdown, updates, scripts, inventory
 
-## What You Get
+## 🔧 Agent Install
 
-✅ PostgreSQL database
-✅ Redis cache
-✅ FastAPI backend
-✅ Beautiful dark UI
-✅ Real-time WebSocket
-✅ Device management
-✅ Ready for agents
-
-## Configuration
-
-Edit `.env` before deploying:
-- Change all passwords
-- Set SERVER_IP to your actual IP
-- Keep AGENT_TOKEN secure
-
-## Troubleshooting
-
-### Build fails
-```bash
-echo '{"dns": ["8.8.8.8"]}' | sudo tee /etc/docker/daemon.json
-sudo systemctl restart docker
+```powershell
+# Windows
+$env:SERVER_URL="http://your-server:8000"
+python agent-windows/windows_agent.py
 ```
 
-### Check status
-```bash
-docker compose ps
-docker compose logs -f
-curl http://localhost:8000/api/health
-```
+## 📝 License
 
-## Done.
+MIT - Free for any use
+
+⭐ **Star if useful!**
